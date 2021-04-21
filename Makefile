@@ -10,7 +10,7 @@
 # 	$(CC) -c $(LBR) $(FILE) $(LINKER_FLAGS) -o $(NAME) 
 
 CC = g++
-CFLAGS = -g -Wall -ldl -lopencv_calib3d -lopencv_core -lopencv_imgcodecs 
+CFLAGS = -g -Wall
 SRCS = main.cpp
 PROG = main
 
