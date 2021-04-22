@@ -1,6 +1,10 @@
 # sobel-paralel-kernel
 
-## params
+## Compilar
+
+`make`
+
+## Ejecutar
  `./main [-i nombreImagen][-T hilos][-t sobelTreshold][-b blur][-k blurSize][-s blurSigma][-m calcularPromedio][-u intentos][-h help]`
 
  - [-i nombreImagen]: nombre de la imagen dentro de la carpeta "images".
