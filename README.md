@@ -1,0 +1,1 @@
+# sobel-paralel-kernel
