@@ -16,3 +16,7 @@
  - [-m calcularPromedio]: si > 0 Calcula el tiempo promedio con -u intentos con un maximo de $2^{-T}$ hilos.
  - [-u intentos]: cantidad de intentos para el promedio
  - [-h help]: Despliega la lista de flags.
+
+## Integrantes
+ - Andres Camilo Correa Romero - anccorrearo@unal.edu.co
+ - Heidy Alayon Sastoque - halayons@unal.edu.co
