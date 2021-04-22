@@ -4,14 +4,30 @@
 #include <math.h>
 #include <iostream>
 
+#include <sys/time.h>
+
+#include <pthread.h>
+
 using namespace cv;
 
-std::string name;
-int treshold;
+struct argsSobel {
+   Mat *img;
+   Mat *out;
+   int idxI;
+   int idxF;
+   int th;
+};
 
-bool blur;
-int blurSize;
-int blurSigma;
+struct argsBlur {
+   Mat *img;
+   Mat *out;
+   int idxI;
+   int idxF;
+   int blurSize;
+   double** kernel;
+};
+
+std::string name;
 
 double** gaussKernel(int size, double sigma, int K){
    double** gauss = 0;
@@ -38,47 +54,62 @@ double** gaussKernel(int size, double sigma, int K){
    return gauss;
 }
 
-void gaussBlur(Mat *img){
-   
-   int kS = 3;
-   int gSigma = blurSigma;
+void *gaussBlur(void *arg){
+   argsBlur prms = *(argsBlur *) arg;
+   Mat *img = prms.img;
+   Mat *out = prms.out;
+   int idxI = prms.idxI;
+   int idxF = prms.idxF;
+   double** kernel = prms.kernel;
+   int kS = prms.blurSize;
 
-   double** kernel = gaussKernel(kS, gSigma, 1);
+   // printf("%d %d %d %d %d %d -- AA\n", out, out, out, out, out, out);
+   // double** kernel = gaussKernel(3, 100, 1);
+   // int kS = 3;
 
-   int imgW = ((Mat) *img).rows;
-   int imgH = ((Mat) *img).cols;
+   int imgW = ((Mat) *img).cols;
+   int imgH = ((Mat) *img).rows;
 
    Mat nx = ((Mat) *img).clone();
+   Mat mask = Mat(imgH, imgW, nx.type(), 0.0);
 
-   for(int i = 0; i < imgW; i++){
-      for(int j = 0; j < imgH; j++){
+   for (int idx = idxI; idx < idxF; idx++){
+      int i = idx % imgW;
+      int j = idx / imgW;
 
-         float sum = 0.0;
+      float sum = 0.0;
 
-         for(int k = 0; k < kS; k++){
-               for(int l = 0; l < kS; l++){
-                  int x = i + (k - kS / 2);
-                  int y = j + (l - kS / 2);          
-                  
-               //   std::cout << x << " " << y << " --- "<< i << " " << j << std::endl;
+      for(int k = 0; k < kS; k++){
+            for(int l = 0; l < kS; l++){
+               int x = i + (k - kS / 2);
+               int y = j + (l - kS / 2);          
 
-                  if(x >= 0 && x < imgW && y >= 0 && y < imgH){
-                     double kV = kernel[k][l];
-                     sum += ((Mat) *img).at<Vec3b>(x, y)[0] * kV;
-                  } 
-               }
-         }
+               if(x >= 0 && x < imgW && y >= 0 && y < imgH){
+                  double kV = kernel[k][l];
+                  sum += ((Mat) *img).at<Vec3b>(y, x)[0] * kV;
 
-         nx.at<Vec3b>(i, j) = Vec3b(sum,sum,sum);
+               } 
+            }
       }
-   }
+      
+      nx.at<Vec3b>(j, i) = Vec3b(sum,sum,sum);
+      mask.at<Vec3b>(j, i) = Vec3b(1, 1, 1);
 
-   *img = nx;
+   }
+   nx.copyTo(((Mat)*out), mask);
+   return NULL;
 }
 
-void sobel(Mat *img){
-   int kS = 3;
 
+void *sobel(void *arg){
+   argsSobel prms = *(argsSobel *) arg;
+   Mat *img = prms.img;
+   Mat *out = prms.out;
+   int idxI = prms.idxI;
+   int idxF = prms.idxF;
+   int treshold = prms.th;
+
+   int kS = 3;
    double sobelX[3][3] = {
       {1.0, 0.0, -1.0},
       {2.0, 0.0, -2.0},
@@ -91,49 +122,48 @@ void sobel(Mat *img){
       {-1.0, -2.0, -1.0}
    };
 
-   int imgW = ((Mat) *img).rows;
-   int imgH = ((Mat) *img).cols;
-
-   double mx = 0;
+   int imgW = ((Mat) *img).cols;
+   int imgH = ((Mat) *img).rows;
 
    Mat nx = ((Mat) *img).clone();
+   Mat mask = Mat(imgH, imgW, nx.type(), 0.0);
 
-   for(int i = 0; i < imgW; i++){
-      for(int j = 0; j < imgH; j++){
+   for (int idx = idxI; idx < idxF; idx++){
 
-         double sumX = 0.0;
-         double sumY = 0.0;
+      int i = idx % imgW;
+      int j = idx / imgW;
 
-         for(int k = 0; k < kS; k++){
-               for(int l = 0; l < kS; l++){
-                  int x = i + (k - kS / 2);
-                  int y = j + (l - kS / 2);          
-                  
-               //   std::cout << x << " " << y << " --- "<< i << " " << j << std::endl;
+      double sumX = 0.0;
+      double sumY = 0.0;
 
-                  if(x >= 0 && x < imgW && y >= 0 && y < imgH){
-                     sumX += sobelX[k][l] * ((Mat) *img).at<Vec3b>(x, y)[0];
-                     sumY += sobelY[k][l] * ((Mat) *img).at<Vec3b>(x, y)[0];
-                  } 
-               }
+      for(int k = 0; k < kS; k++){
+         for(int l = 0; l < kS; l++){
+            int x = i + (k - kS / 2);
+            int y = j + (l - kS / 2);          
+            
+
+            if(x >= 0 && x < imgW && y >= 0 && y < imgH){
+               sumX += sobelX[k][l] * ((Mat) *img).at<Vec3b>(y, x)[0];
+               sumY += sobelY[k][l] * ((Mat) *img).at<Vec3b>(y, x)[0];
+            } 
          }
-
-         int v = (int) (sqrt(sumX * sumX + sumY * sumY) / 1448 * 256);  
-         int a = max(v, treshold);
-
-         if(a == treshold) 
-            nx.at<Vec3b>(i, j) = Vec3b(0,0,0);
-         else 
-            nx.at<Vec3b>(i, j) = Vec3b(a,a,a);
-
       }
+
+      int v = (int) (sqrt(sumX * sumX + sumY * sumY) / 1448 * 256);  
+      int a = max(v, treshold);
+
+      if(a == treshold) 
+         nx.at<Vec3b>(j, i) = Vec3b(0,0,0);
+      else 
+         nx.at<Vec3b>(j, i) = Vec3b(255,255,255);
+
+      mask.at<Vec3b>(j, i) = Vec3b(1, 1, 1);
+
    }
-
-   std::cout << mx << std::endl;
-
-   *img = nx;
-
+   nx.copyTo(((Mat)*out), mask);
+   return NULL;
 }
+
 
 void bW(Mat *img){
    int rows = ((Mat) *img).rows;
@@ -148,21 +178,107 @@ void bW(Mat *img){
    }
 }
 
-void sobelSq(std::string iName, int th, bool blr, int bS, int bSg){
-   
+float sobelSq(std::string iName, int th, bool blr, int bS, int bSg, int p){
    name = iName;
-   treshold = th;
-   blur = blr;
-   blurSize = bS;
-   blurSigma = bSg;
+
+   struct timeval tval_before, tval_after, tval_result;
+   gettimeofday(&tval_before, NULL);
 
    std::string image_path = samples::findFile("images/" + name);
    Mat img = imread(image_path, IMREAD_COLOR);
 
+   Mat out = img.clone();
 
    bW(&img);
-   if(blur) gaussBlur(&img);
-   sobel(&img);
 
-   imwrite("out/" + name, img);
+   // ----------------- BLUR-----------------
+   if (blr){      
+      double** kernel = gaussKernel(bS, bSg, 1);
+      int rDelta = (img.cols * img.rows - 1) / p;
+      int r = 0;
+
+      pthread_t threadsB[p];
+      argsBlur * prmsB;
+      prmsB = (argsBlur *) malloc(p * 1024 * sizeof(argsBlur));
+
+      Mat imgs[p];
+
+      for(int i = 0; i < p; i++){
+         int rI = r;
+         int rF = min(r + rDelta, img.cols * img.rows - 1) ;
+
+         // printf("%d - %d\n", r + rDelta, img.cols * img.rows -1);
+
+         imgs[i] = img.clone();
+
+         (prmsB + i * 1024) -> idxI = rI;
+         (prmsB + i * 1024) -> idxF = rF;
+         (prmsB + i * 1024) -> img = &imgs[i];
+         (prmsB + i * 1024) -> out = &out;
+         (prmsB + i * 1024) -> blurSize = bS;
+         (prmsB + i * 1024) -> kernel = kernel;
+
+         int res = pthread_create(&threadsB[i], NULL, gaussBlur, (prmsB + i * 1024));
+
+         if(res != 0) exit(-1);
+
+         r += rDelta;
+
+         // pthread_join(threadsB[i], NULL);
+      }
+
+      for(int t = 0; t < p; t++)  pthread_join(threadsB[t], NULL);
+
+      free(prmsB);
+   }
+
+
+   img = out.clone();
+   
+
+   // ----------------- SOBEL-----------------
+
+   int rDelta = (img.cols * img.rows - 1) / p;
+   int r = 0;
+
+   pthread_t threads[p];
+
+   argsSobel * prms;
+   prms = (argsSobel *) malloc(p * 1024 * sizeof(argsSobel));
+
+   Mat imgs[p];
+
+   for(int i = 0; i < p; i++){
+      int rI = r;
+      int rF = min(r + rDelta, img.cols * img.rows -1);
+
+      imgs[i] = img.clone();
+      
+      (prms + i * 1024) -> idxI = rI;
+      (prms + i * 1024) -> idxF = rF;
+      (prms + i * 1024) -> img = &imgs[i];
+      (prms + i * 1024) -> out = &out;
+      (prms + i * 1024) -> th = th;
+
+      int res = pthread_create(&threads[i], NULL, sobel, (prms + i * 1024));
+
+      if(res != 0) exit(-1);
+
+      r += rDelta;
+   }
+
+   for(int t = 0; t < p; t++)  pthread_join(threads[t], NULL);
+      
+
+   gettimeofday(&tval_after, NULL);
+   timersub(&tval_after, &tval_before, &tval_result);
+   // printf("%d threads -> %ld.%06lds\n", p, (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+
+   imwrite("out/" + name, out);
+
+   free(prms);
+
+   // String res = tval_result.tv_sec + "." + tval_result.tv_usec;
+   // std::cout << res << std::endl;
+   return (long int)tval_result.tv_sec + (long int)tval_result.tv_usec * 0.000001;
 }

@@ -10,7 +10,7 @@
 # 	$(CC) -c $(LBR) $(FILE) $(LINKER_FLAGS) -o $(NAME) 
 
 CC = g++
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -pthread 
 SRCS = main.cpp
 PROG = main
 
